@@ -1,0 +1,81 @@
+---
+title: "Prediction assignment"
+author: "Jan Kips"
+date: "2024-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE,cache=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Goal of this project is to predict how well people perform a certain activity.
+We will do so using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+'how well' is defined as a "classe". The goal is to build a model to predict the "classe" of 20 test cases, based on training data.
+
+## Data processing
+
+```{r}
+library(caret)
+training_raw<-read.csv("pml-training.csv")
+testing_raw<-read.csv("pml-testing.csv")
+training_raw$classe<-as.factor(training_raw$classe)
+dim(training_raw)
+#remove parameters that are irrelevant for predicting the classe
+trainRemove <- grepl("^user|^X|timestamp|window", names(training_raw))
+training1<-training_raw[,!trainRemove]
+
+#restrict to the complete cases
+#training2<-training1[complete.cases(training_raw),]
+
+# remove rows with missing values
+training2<- training1[, colSums(is.na(training1)) == 0]
+#testing <- testing1[, colSums(is.na(testing)) == 0]
+
+# Removing near-zero covariates
+near_zero<-nearZeroVar(training2, saveMetrics=TRUE)
+training3<-training2[,!near_zero[4]]
+training_cleaned<-training3
+dim(training_cleaned)
+```
+We started from a matrix of 19622 observations of 160 variables, and reduced it to a cleaned dataset of 406 observations of 145 variables.
+
+## Cross-validation
+The cleaned dataset is split in a training (30%) and validation set (70%).
+I realize that it should be the other way around, and the training set should be much larger than the validation set, but my computer crashes when sizing the training set appropriately. Therefore, I use a smaller partition to train.
+```{r,cache=TRUE}
+inTrain <- createDataPartition(training_cleaned$classe, p=0.3, list=F)
+trainData<-training_cleaned[inTrain,]
+valData<-training_cleaned[-inTrain,]
+```
+
+## Building the model
+### GBM
+```{r}
+
+set.seed(12345)
+gbm_control <- trainControl(method = "repeatedcv", number = 3, repeats = 1)
+gbm_mod  <- train(classe ~ ., data=trainData, method = "gbm", trControl = gbm_control, verbose = FALSE)
+gbm_predict <- predict(gbm_mod, newdata=valData)
+gbm_cm <- confusionMatrix(factor(gbm_predict), factor(valData$classe))
+gbm_cm
+```
+The accuracy is ..%.
+
+### Random Forest
+```{r}
+rf_control<-trainControl(method = "repeatedcv", number = 2, repeats = 1)
+rf_mod<-train(classe~.,data=trainData,method="rf",trControl=rf_control,allowParallel = TRUE)
+rf_predict<-predict(rf_mod,newdata=valData)
+rf_cm<-confusionMatrix(factor(rf_predict),factor(valData$classe))
+rf_cm
+```
+The accuracy is ..%.
+
+
+### Predict
+Based on the above results, it's clear that the Random Forest model is the most accurate. Therefore we'll use that model to predict the classe for the provided test data.
+```{r}
+predict(rf_mod, newdata=testing_raw)
+```
