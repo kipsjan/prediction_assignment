@@ -11,7 +11,7 @@
 
 <meta name="author" content="Jan Kips" />
 
-<meta name="date" content="2024-09-01" />
+<meta name="date" content="2024-10-18" />
 
 <title>Prediction assignment</title>
 
@@ -352,7 +352,7 @@ display: none;
 
 <h1 class="title toc-ignore">Prediction assignment</h1>
 <h4 class="author">Jan Kips</h4>
-<h4 class="date">2024-09-01</h4>
+<h4 class="date">2024-10-18</h4>
 
 </div>
 
@@ -378,13 +378,12 @@ dim(training_raw)</code></pre>
 <pre class="r"><code>#remove parameters that are irrelevant for predicting the classe
 trainRemove &lt;- grepl(&quot;^user|^X|timestamp|window&quot;, names(training_raw))
 training1&lt;-training_raw[,!trainRemove]
-
+    
 #restrict to the complete cases
-#training2&lt;-training1[complete.cases(training_raw),]
+# training2&lt;-training1[complete.cases(training_raw),]
 
 # remove rows with missing values
 training2&lt;- training1[, colSums(is.na(training1)) == 0]
-#testing &lt;- testing1[, colSums(is.na(testing)) == 0]
 
 # Removing near-zero covariates
 near_zero&lt;-nearZeroVar(training2, saveMetrics=TRUE)
@@ -392,115 +391,144 @@ training3&lt;-training2[,!near_zero[4]]
 training_cleaned&lt;-training3
 dim(training_cleaned)</code></pre>
 <pre><code>## [1] 19622    53</code></pre>
-<p>We started from a matrix of 19622 observations of 160 variables, and
-reduced it to a cleaned dataset of 406 observations of 145
-variables.</p>
+<p>We reduced the number of variables from 160 to 53.</p>
 </div>
 <div id="cross-validation" class="section level2">
 <h2>Cross-validation</h2>
-<p>The cleaned dataset is split in a training (30%) and validation set
-(70%). I realize that it should be the other way around, and the
-training set should be much larger than the validation set, but my
-computer crashes when sizing the training set appropriately. Therefore,
-I use a smaller partition to train.</p>
-<pre class="r"><code>inTrain &lt;- createDataPartition(training_cleaned$classe, p=0.3, list=F)
+<p>The cleaned dataset is split in a training and a validation set.
+Note: In theory, one should use ca 70% of the data for training the
+prediction model and ca 30% for validation. In practice, working with
+such large training sets to calculate the prediction model really takes
+a LOT of computing time on my machine, so for this assessment I trained
+the prediction models on only 20% of the total training dataset. While
+this obviously will have an impact on the accuracy of the prediction
+model, it does not take away any of the learning opportunity while doing
+this assessment.</p>
+<pre class="r"><code>    #careful: the split should be set to 70/30 for training/validation, but doing so takes a LOT of computing time to calculate the prediction models.
+    #therefore, for now using only 10% for the training dataset to allow troubleshooting the syntax.
+inTrain &lt;- createDataPartition(training_cleaned$classe, p=0.1, list=F)
 trainData&lt;-training_cleaned[inTrain,]
 valData&lt;-training_cleaned[-inTrain,]</code></pre>
 </div>
-<div id="building-the-model" class="section level2">
-<h2>Building the model</h2>
-<div id="gbm" class="section level3">
-<h3>GBM</h3>
-<pre class="r"><code>set.seed(12345)
-gbm_control &lt;- trainControl(method = &quot;repeatedcv&quot;, number = 3, repeats = 1)
-gbm_mod  &lt;- train(classe ~ ., data=trainData, method = &quot;gbm&quot;, trControl = gbm_control, verbose = FALSE)
-gbm_predict &lt;- predict(gbm_mod, newdata=valData)
-gbm_cm &lt;- confusionMatrix(factor(gbm_predict), factor(valData$classe))
-gbm_cm</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 3830  105    0    4    6
-##          B   54 2439  103   16   40
-##          C   12   92 2265   93   38
-##          D    9    9   21 2123   36
-##          E    1   12    6   15 2404
-## 
-## Overall Statistics
-##                                           
-##                Accuracy : 0.9511          
-##                  95% CI : (0.9473, 0.9546)
-##     No Information Rate : 0.2844          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.9381          
-##                                           
-##  Mcnemar&#39;s Test P-Value : &lt; 2.2e-16       
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9805   0.9180   0.9457   0.9431   0.9525
-## Specificity            0.9883   0.9808   0.9793   0.9935   0.9970
-## Pos Pred Value         0.9708   0.9197   0.9060   0.9659   0.9861
-## Neg Pred Value         0.9922   0.9803   0.9884   0.9889   0.9894
-## Prevalence             0.2844   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2789   0.1776   0.1649   0.1546   0.1751
-## Detection Prevalence   0.2873   0.1931   0.1820   0.1601   0.1775
-## Balanced Accuracy      0.9844   0.9494   0.9625   0.9683   0.9747</code></pre>
-<p>The accuracy is ..%.</p>
-</div>
+<div id="comparing-prediction-models" class="section level2">
+<h2>Comparing prediction models</h2>
 <div id="random-forest" class="section level3">
 <h3>Random Forest</h3>
-<pre class="r"><code>rf_control&lt;-trainControl(method = &quot;repeatedcv&quot;, number = 2, repeats = 1)
-rf_mod&lt;-train(classe~.,data=trainData,method=&quot;rf&quot;,trControl=rf_control,allowParallel = TRUE)
-rf_predict&lt;-predict(rf_mod,newdata=valData)
-rf_cm&lt;-confusionMatrix(factor(rf_predict),factor(valData$classe))
-rf_cm</code></pre>
+<p>We start with random forest model:</p>
+<pre class="r"><code>    #train model
+    rf_model&lt;-train(classe~.,data=trainData,method=&quot;rf&quot;,allowParallel = TRUE)</code></pre>
+<p>Predictions of the random forest model on the validation set:</p>
+<pre class="r"><code>    #assess prediction accuracy on validation data
+    rf_predict&lt;-predict(rf_model,newdata=valData)
+    rf_cm &lt;- confusionMatrix(factor(rf_predict), factor(valData$classe))
+    rf_cm</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 3894   53    0    1    0
-##          B    8 2552   29    3   14
-##          C    0   42 2352   52    8
-##          D    4    9   12 2193   11
-##          E    0    1    2    2 2491
+##          A 4935  170   12   22    8
+##          B   33 3022  160   12   70
+##          C   33  206 2833  126   49
+##          D   17   10   67 2719   53
+##          E    4    9    7   15 3066
 ## 
 ## Overall Statistics
-##                                           
-##                Accuracy : 0.9817          
-##                  95% CI : (0.9793, 0.9839)
-##     No Information Rate : 0.2844          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
-##                                           
-##                   Kappa : 0.9769          
-##                                           
-##  Mcnemar&#39;s Test P-Value : NA              
+##                                          
+##                Accuracy : 0.9387         
+##                  95% CI : (0.935, 0.9422)
+##     No Information Rate : 0.2844         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.9224         
+##                                          
+##  Mcnemar&#39;s Test P-Value : &lt; 2.2e-16      
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9969   0.9605   0.9820   0.9742   0.9869
-## Specificity            0.9945   0.9951   0.9910   0.9969   0.9996
-## Pos Pred Value         0.9863   0.9793   0.9584   0.9838   0.9980
-## Neg Pred Value         0.9988   0.9906   0.9962   0.9950   0.9971
+## Sensitivity            0.9827   0.8844   0.9201   0.9395   0.9445
+## Specificity            0.9832   0.9807   0.9716   0.9900   0.9976
+## Pos Pred Value         0.9588   0.9166   0.8725   0.9487   0.9887
+## Neg Pred Value         0.9930   0.9725   0.9829   0.9882   0.9876
 ## Prevalence             0.2844   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2836   0.1858   0.1713   0.1597   0.1814
-## Detection Prevalence   0.2875   0.1898   0.1787   0.1623   0.1818
-## Balanced Accuracy      0.9957   0.9778   0.9865   0.9855   0.9932</code></pre>
-<p>The accuracy is ..%.</p>
+## Detection Rate         0.2795   0.1711   0.1604   0.1540   0.1736
+## Detection Prevalence   0.2915   0.1867   0.1839   0.1623   0.1756
+## Balanced Accuracy      0.9829   0.9325   0.9459   0.9648   0.9711</code></pre>
 </div>
-<div id="predict" class="section level3">
-<h3>Predict</h3>
-<p>Based on the above results, it’s clear that the Random Forest model
-is the most accurate. Therefore we’ll use that model to predict the
-classe for the provided test data.</p>
-<pre class="r"><code>predict(rf_mod, newdata=testing_raw)</code></pre>
-<pre><code>##  [1] B A B A A E D B A A B C B A E E A B B B
-## Levels: A B C D E</code></pre>
+<div id="gradient-boosting-model-gbm" class="section level3">
+<h3>Gradient Boosting Model (GBM)</h3>
+<pre class="r"><code>    #train model
+    set.seed(12345)
+    gbm_control &lt;- trainControl(method = &quot;repeatedcv&quot;, number = 5, repeats = 1)
+    gbm_model  &lt;- train(classe ~ ., data=trainData, method = &quot;gbm&quot;, trControl = gbm_control, verbose = FALSE)</code></pre>
+<p>Predictions of the GBM model on the validation set:</p>
+<pre class="r"><code>    #assess prediction accuracy on validation data
+    gbm_predict &lt;- predict(gbm_model, newdata=valData)
+    gbm_cm &lt;- confusionMatrix(factor(gbm_predict), factor(valData$classe))
+    gbm_cm</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 4890  161    2   15   21
+##          B   56 3014  181    9  111
+##          C   27  217 2788  150   43
+##          D   37    8   93 2670   61
+##          E   12   17   15   50 3010
+## 
+## Overall Statistics
+##                                          
+##                Accuracy : 0.9272         
+##                  95% CI : (0.9232, 0.931)
+##     No Information Rate : 0.2844         
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16      
+##                                          
+##                   Kappa : 0.9078         
+##                                          
+##  Mcnemar&#39;s Test P-Value : &lt; 2.2e-16      
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity            0.9737   0.8821   0.9055   0.9226   0.9273
+## Specificity            0.9843   0.9749   0.9700   0.9865   0.9935
+## Pos Pred Value         0.9609   0.8941   0.8645   0.9306   0.9697
+## Neg Pred Value         0.9895   0.9718   0.9798   0.9849   0.9838
+## Prevalence             0.2844   0.1935   0.1744   0.1639   0.1838
+## Detection Rate         0.2769   0.1707   0.1579   0.1512   0.1705
+## Detection Prevalence   0.2882   0.1909   0.1826   0.1625   0.1758
+## Balanced Accuracy      0.9790   0.9285   0.9378   0.9546   0.9604</code></pre>
 </div>
+</div>
+<div id="selecting-the-best-prediction-model" class="section level2">
+<h2>Selecting the best prediction model</h2>
+<p>The random forest prediction model has the highest accuracy, so the
+actual prediction on the test data is done using this model. The out of
+sample error - calculated as 1 minus the accuracy - is around 5%. That
+means on average 1 out of the 20 predictions will be incorrect.</p>
+<pre class="r"><code>    rf_predict_test&lt;-predict(rf_model,testing_raw)
+    as.data.frame(rf_predict_test)</code></pre>
+<pre><code>##    rf_predict_test
+## 1                C
+## 2                A
+## 3                B
+## 4                A
+## 5                A
+## 6                E
+## 7                D
+## 8                D
+## 9                A
+## 10               A
+## 11               B
+## 12               C
+## 13               B
+## 14               A
+## 15               E
+## 16               E
+## 17               A
+## 18               B
+## 19               B
+## 20               B</code></pre>
 </div>
 
 
